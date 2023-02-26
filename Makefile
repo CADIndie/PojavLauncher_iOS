@@ -191,13 +191,10 @@ jre:
 		rm ../jre8-*.tar.xz; \
 	fi; \
 	cd $(SOURCEDIR)/depends; \
-	if [ ! -f "java-17-openjdk/release" ] && [ ! -f "$(ls jre17-*.tar.xz)" ]; then \
-		if [ "$(RUNNER)" != "1" ]; then \
-			wget 'https://github.com/PojavLauncherTeam/android-openjdk-build-multiarch/releases/download/jre17-ca01427/jre17-arm64-20220817-release.tar.xz' -q --show-progress; \
-		fi; \
+	if [ ! -f "java-17-openjdk/release" ] && [ ! -f "$(ls jre21-*.tar.xz)" ]; then \
 		mkdir java-17-openjdk && cd java-17-openjdk; \
-		tar xvf ../jre17-*.tar.xz; \
-		rm ../jre17-*.tar.xz; \
+		tar xvf ../jre21-*.tar.xz; \
+		rm ../jre21-*.tar.xz; \
 	fi; \
 	cd ..; \
 	rm -rf $(SOURCEDIR)/depends/java-*-openjdk/{bin,include,jre,lib/{ct.sym,libjsig.dylib,src.zip,tools.jar}}; \
