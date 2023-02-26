@@ -48,6 +48,7 @@ jobs:
           github_token: ${{secrets.GITHUB_TOKEN}}
           workflow: build.yml
           path: depends
+          workflow_conclusion: completed
           check_artifacts: true
           search_artifacts: true
           repo: PojavLauncherTeam/android-openjdk-build-multiarch
