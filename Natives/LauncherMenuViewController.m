@@ -4,6 +4,7 @@
 #import "AccountListViewController.h"
 #import "AFNetworking.h"
 #import "ALTServerConnection.h"
+#import "LauncherNavigationController.h"
 #import "LauncherMenuViewController.h"
 #import "LauncherNewsViewController.h"
 #import "LauncherPreferences.h"
@@ -27,15 +28,17 @@
 
 @interface LauncherMenuViewController()
 @property(nonatomic) NSMutableArray<UIViewController*> *options;
-@property(nonatomic) UIButton *accountButton;
-@property(nonatomic) UIBarButtonItem *accountBtnItem;
 @property(nonatomic) UILabel *statusLabel;
 @end
 
 @implementation LauncherMenuViewController
 
+#define contentNavigationController ((LauncherNavigationController *)self.splitViewController.viewControllers[1])
+
 - (void)viewDidLoad {
     [super viewDidLoad];
+    
+    self.isInitialVc = YES;
 
     UIImageView *titleView = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"AppLogo"]];
     [titleView setContentMode:UIViewContentModeScaleAspectFit];
@@ -110,18 +113,9 @@
     }
 
     // Setup the account button
-    self.accountButton = [UIButton buttonWithType:UIButtonTypeCustom];
-    [self.accountButton addTarget:self action:@selector(selectAccount:) forControlEvents:UIControlEventTouchUpInside];
-    self.accountButton.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
-
-    self.accountButton.titleEdgeInsets = UIEdgeInsetsMake(0, 4, 0, -4);
-    self.accountButton.imageView.contentMode = UIViewContentModeScaleAspectFit;
-    self.accountButton.titleLabel.lineBreakMode = NSLineBreakByWordWrapping;
-    self.accountBtnItem = [[UIBarButtonItem alloc] initWithCustomView:self.accountButton];
+    self.accountBtnItem = [self drawAccountButton];
 
     [self updateAccountInfo];
-
-    [self tableView:self.tableView didSelectRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
 
     if (!getEntitlementValue(@"dynamic-codesigning")) {
         if (isJITEnabled()) {
@@ -138,10 +132,22 @@
     [self restoreHighlightedSelection];
 }
 
-- (void)restoreHighlightedSelection {
-    // workaround while investigating for issue
-    if (self.splitViewController.viewControllers.count < 2) return;
+- (UIBarButtonItem *)drawAccountButton {
+     self.accountButton = [UIButton buttonWithType:UIButtonTypeCustom];
+     [self.accountButton addTarget:self action:@selector(selectAccount:) forControlEvents:UIControlEventPrimaryActionTriggered];
+     self.accountButton.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
 
+     self.accountButton.titleEdgeInsets = UIEdgeInsetsMake(0, 4, 0, -4);
+     self.accountButton.imageView.contentMode = UIViewContentModeScaleAspectFit;
+     self.accountButton.titleLabel.lineBreakMode = NSLineBreakByWordWrapping;
+     self.accountBtnItem = [[UIBarButtonItem alloc] initWithCustomView:self.accountButton];
+
+     [self updateAccountInfo];
+
+     return self.accountBtnItem;
+ }
+
+- (void)restoreHighlightedSelection {
     // Restore the selected row when the view appears again
     int index = [self.options indexOfObject:[self.splitViewController.viewControllers[1] viewControllers][0]];
     NSIndexPath *indexPath = [NSIndexPath indexPathForRow:index inSection:0];
@@ -178,15 +184,22 @@
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
 {
     UIViewController *selected = self.options[indexPath.row];
-    if ([selected isKindOfClass:UIViewController.class]) {
-        [self.splitViewController.viewControllers[1] setViewControllers:@[selected] animated:NO]; //YES?
 
-        if (@available(iOS 14.0, tvOS 14.0, *)) {
-            selected.navigationItem.leftBarButtonItem = self.accountBtnItem;
-            // It is unnecessary to put the toggle button as it is automated on iOS 14+
-            return;
+    if ([selected isKindOfClass:UIViewController.class]) {
+        if(self.isInitialVc) {
+            self.isInitialVc = NO;
+        } else {
+            [contentNavigationController setViewControllers:@[selected] animated:NO];
         }
-        selected.navigationItem.leftBarButtonItems = @[self.splitViewController.displayModeButtonItem, self.accountBtnItem];
+
+        if([self.options[indexPath.row].title isEqualToString:localize(@"Settings", nil)]) {
+            LauncherPreferencesViewController *vc = (LauncherPreferencesViewController *)selected;
+            selected.navigationItem.rightBarButtonItems = @[self.accountBtnItem, [vc drawHelpButton]];
+        } else {
+            selected.navigationItem.rightBarButtonItem = self.accountBtnItem;
+        }
+
+         selected.navigationItem.leftBarButtonItem = self.splitViewController.displayModeButtonItem;
         selected.navigationItem.leftItemsSupplementBackButton = true;
     } else {
         ((LauncherMenuCustomItem *)selected).action();
@@ -223,9 +236,14 @@
 
 - (void)updateAccountInfo {
     NSDictionary *selected = BaseAuthenticator.current.authData;
+    CGSize size = CGSizeMake(contentNavigationController.view.frame.size.width, contentNavigationController.view.frame.size.height);
 
     if (selected == nil) {
-        [self.accountButton setAttributedTitle:[[NSAttributedString alloc] initWithString:localize(@"login.option.select", nil)] forState:UIControlStateNormal];
+        if((size.width / 3) > 200) {
+            [self.accountButton setAttributedTitle:[[NSAttributedString alloc] initWithString:localize(@"login.option.select", nil)] forState:UIControlStateNormal];
+        } else {
+            [self.accountButton setAttributedTitle:(NSAttributedString *)@"" forState:UIControlStateNormal];
+        }
         [self.accountButton setImage:[UIImage imageNamed:@"DefaultAccount"] forState:UIControlStateNormal];
         [self.accountButton sizeToFit];
         return;
@@ -233,9 +251,9 @@
 
     BOOL isDemo = [selected[@"username"] hasPrefix:@"Demo."];
     NSMutableAttributedString *title = [[NSMutableAttributedString alloc] initWithString:[selected[@"username"] substringFromIndex:(isDemo?5:0)]];
+    
     id subtitle;
     if (isDemo) {
-        // Remove the prefix "Demo."
         subtitle = localize(@"login.option.demo", nil);
     } else if (selected[@"xboxGamertag"] == nil) {
         subtitle = localize(@"login.option.local", nil);
@@ -243,10 +261,23 @@
         // Display the Xbox gamertag for online accounts
         subtitle = selected[@"xboxGamertag"];
     }
+
     subtitle = [[NSAttributedString alloc] initWithString:subtitle attributes:@{NSFontAttributeName: [UIFont systemFontOfSize:12]}];
     [title appendAttributedString:[[NSAttributedString alloc] initWithString:@"\n" attributes:nil]];
     [title appendAttributedString:subtitle];
-    [self.accountButton setAttributedTitle:title forState:UIControlStateNormal];
+    
+    if((size.width / 3) > 200) {
+        [self.accountButton setAttributedTitle:title forState:UIControlStateNormal];
+    } else {
+        [self.accountButton setAttributedTitle:(NSAttributedString *)@"" forState:UIControlStateNormal];
+    }
+
+    if (selected == nil) {
+        [self.accountButton setAttributedTitle:[[NSAttributedString alloc] initWithString:localize(@"login.option.select", nil)] forState:UIControlStateNormal];
+        [self.accountButton setImage:[UIImage imageNamed:@"DefaultAccount"] forState:UIControlStateNormal];
+        [self.accountButton sizeToFit];
+        return;
+    }
 
     NSURL *url = [NSURL URLWithString:[selected[@"profilePicURL"] stringByReplacingOccurrencesOfString:@"\\/" withString:@"/"]];
     UIImage *placeholder = [UIImage imageNamed:@"DefaultAccount"];
@@ -282,7 +313,7 @@
                 [self displayProgress:nil];
             } else {
                 NSLog(@"[AltKit] Could not enable JIT compilation. %@", error);
-                [self displayProgress:localize(@"login.jit.fail.AltKit", nil)];
+                [self displayProgress:[NSString stringWithFormat:localize(@"login.jit.fail.AltKit", nil), error.description]];
                 [self displayProgress:nil];
                 showDialog(self, localize(@"Error", nil), error.description);
             }

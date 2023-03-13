@@ -1,8 +1,12 @@
 #import <SafariServices/SafariServices.h>
 #import <WebKit/WebKit.h>
+#import "LauncherMenuViewController.h"
 #import "LauncherNewsViewController.h"
 #import "LauncherPreferences.h"
 #import "utils.h"
+
+#define sidebarNavController ((UINavigationController *)self.splitViewController.viewControllers[0])
+#define sidebarViewController ((LauncherMenuViewController *)sidebarNavController.viewControllers[0])
 
 @interface LauncherNewsViewController()<WKNavigationDelegate>
 @end
@@ -60,6 +64,11 @@ UIEdgeInsets insets;
         [ramalert addAction:ok];
         setPreference(@"ram_unjb_warn", @NO);
     }
+    
+    self.title = localize(@"News", nil);
+    self.navigationItem.leftBarButtonItem = self.splitViewController.displayModeButtonItem;
+    self.navigationItem.rightBarButtonItem = [sidebarViewController drawAccountButton];
+    self.navigationItem.leftItemsSupplementBackButton = true;
 }
 
 
